@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 	pthread_mutex_init(&total_lock,NULL);
 	readf(fp);
 	for(i=0;i<NUM_THREADS;i++){
-		rc=pthread_create(&threads[i],NULL,sub_string,(void *)i);
+		rc=pthread_create(&threads[i],NULL,sub_string,(void *)(long)i);
 		if (rc){
 			printf("ERROR: return error from pthread_create() is %d\n", rc);
 			exit(-1);
@@ -55,7 +55,7 @@ int readf(FILE *fp)
 		return -1;
 	}
 	s2=(char *)malloc(sizeof(char)*MAX);
-	if(s1==NULL){
+	if(s2==NULL){
 		printf("ERROR: Out of memory\n");
 		return -1;
 	}
@@ -63,16 +63,47 @@ int readf(FILE *fp)
 	s1=fgets(s1, MAX, fp);
 	s2=fgets(s2, MAX, fp);
 	n1=strlen(s1);  /*length of s1*/
-	n2=strlen(s2)-1; /*length of s2*/
+	n2=strlen(s2); /*length of s2*/
+
+	if (s1[n1 - 1] == '\n') {
+   		s1[n1 - 1] = '\0';
+    		n1--;
+	}
+
+	if (s2[n2 - 1] == '\n') {
+    		s2[n2 - 1] = '\0';
+    		n2--;
+	}
+
 	nlocal=n1/NUM_THREADS;  /*data length held by process*/
 	if(s1==NULL || s2==NULL ||n1<n2)  /*when error exit*/
 		return -1;
+	return 1;
 }
 
 void *sub_string(void *threadid) 	/*each process searches in the string with the step of nprocs until it reach or beyond*/ 
 	/*the (n1-n2)th char which is the last possible beginning of the substring*/
-{
+{	
+	long tid = (long)threadid;
+   	int start = tid * nlocal;
+    	int end = start + nlocal - 1;
+    	int local_total = 0;
+    	for (int i = start; i <= end && i <= n1 - n2; i++) {
+        	int match = 1;
+        	for (int j = 0; j < n2; j++) {
+            		if (s1[i + j] != s2[j]) {
+                	match = 0;
+                	break;
+            		}	
+        	}	
 
+        	if (match)
+            	local_total++;
+    	}
+    	pthread_mutex_lock(&total_lock);
+    	total += local_total;
+    	pthread_mutex_unlock(&total_lock);
+    	pthread_exit(NULL);
 }
 
 
